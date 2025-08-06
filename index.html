@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>アドバイスアプリ（日本語翻訳付き）</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: #fff;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 95%;
+            max-width: none;
+
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #advice {
+            background: #f0f4f8;
+            padding: 20px;
+            font-size: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #222;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        button {
+            padding: 10px 18px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        #getAdvice {
+            background: #007bff;
+            color: #fff;
+        }
+
+        #getAdvice:hover {
+            background: #0056b3;
+        }
+
+        #saveAdvice {
+            background: #28a745;
+            color: #fff;
+        }
+
+        #saveAdvice:hover {
+            background: #1e7e34;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            color: #555;
+            margin-bottom: 10px;
+        }
+
+        #favorites {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        #favorites li {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #favorites li span {
+            flex: 1;
+            margin-right: 10px;
+            word-break: break-word;
+        }
+
+        #favorites li button {
+            flex-shrink: 0;
+            width: 80px;
+            text-align: center;
+        }
+
+        #favorites li button:hover {
+            background: #a71d2a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>今日のアドバイス</h1>
+        <p id="advice">ここにアドバイスが表示されます</p>
+        <div class="btn-group">
+            <button id="getAdvice">新しいアドバイス</button>
+            <button id="saveAdvice">お気に入りに追加</button>
+        </div>
+        <h2>お気に入りアドバイス</h2>
+        <ul id="favorites"></ul>
+    </div>
+
+    <script>
+        const adviceText = document.getElementById("advice");
+        const getButton = document.getElementById("getAdvice");
+        const saveButton = document.getElementById("saveAdvice");
+        const favoritesList = document.getElementById("favorites");
+
+        let currentAdvice = { id: null, advice: "", jp: "" }; // ← 翻訳用の項目追加
+
+        // DeepL翻訳
+        async function translateToJapanese(text) {
+            const res = await fetch("http://localhost:3000/translate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            return data.translations[0].text;
+        }
+
+        // --- APIからランダムアドバイス取得 ---
+        async function fetchAdvice() {
+            try {
+                // ボタン押下時に必ずロード表示
+                adviceText.textContent = "格言を考え中(翻訳中)...";
+                getButton.disabled = true;
+                saveButton.disabled = true;
+
+                const url = "https://api.adviceslip.com/advice?timestamp=" + new Date().getTime();
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("HTTPエラー: " + res.status);
+                const data = await res.json();
+                currentAdvice = data.slip;
+
+                const jpText = await translateToJapanese(currentAdvice.advice);
+                currentAdvice.jp = jpText;
+                adviceText.textContent = `${jpText}（${currentAdvice.advice}）`;
+            } catch (error) {
+                console.error("アドバイス取得失敗:", error);
+                adviceText.textContent = "アドバイスを取得できませんでした。";
+            } finally {
+                getButton.disabled = false;
+                saveButton.disabled = false;
+            }
+        }
+
+
+        // --- localStorageからお気に入りを取得 ---
+        function loadFavorites() {
+            const stored = localStorage.getItem("favorites");
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        // --- localStorageにお気に入りを保存 ---
+        function saveFavorites(favorites) {
+            localStorage.setItem("favorites", JSON.stringify(favorites));
+        }
+
+        // --- お気に入りリストを再描画 ---
+        function renderFavorites() {
+            const favorites = loadFavorites();
+            favoritesList.innerHTML = "";
+            favorites.forEach((item, index) => {
+                const li = document.createElement("li");
+                li.textContent = `${item.jp}（${item.advice}）`;
+                const delBtn = document.createElement("button");
+                delBtn.textContent = "削除";
+                delBtn.addEventListener("click", () => {
+                    favorites.splice(index, 1);
+                    saveFavorites(favorites);
+                    renderFavorites();
+                });
+                li.appendChild(delBtn);
+                favoritesList.appendChild(li);
+            });
+        }
+
+        // --- お気に入りに追加 ---
+        function addFavorite() {
+            const favorites = loadFavorites();
+            if (!favorites.some(item => item.id === currentAdvice.id)) {
+                favorites.push(currentAdvice);
+                saveFavorites(favorites);
+                renderFavorites();
+            } else {
+                alert("すでにお気に入りに追加されています");
+            }
+        }
+
+        getButton.addEventListener("click", fetchAdvice);
+        saveButton.addEventListener("click", addFavorite);
+
+        //fetchAdvice();
+        renderFavorites();
+    </script>
+
+</body>
+
+</html>
