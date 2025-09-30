@@ -146,7 +146,7 @@
 
         // DeepL翻訳
         async function translateToJapanese(text) {
-            const res = await fetch("http://localhost:3000/translate", {
+            const res = await fetch("https://deepl-proxy-g1ex.onrender.com/translate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text })
